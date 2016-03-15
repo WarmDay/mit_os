@@ -150,6 +150,11 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 
 		// Make sure the STABS and string table memory is valid.
 		// LAB 3: Your code here.
+
+		//XGQ START:code for lab2, not for lab3
+		// Can't search for user-level addresses yet!
+  	        // panic("User address");
+		//XGQ END
 	}
 
 	// String table validity checks

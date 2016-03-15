@@ -100,7 +100,12 @@ boot_alloc(uint32_t n)
 	//
 	// LAB 2: Your code here.
 
-	return NULL;
+        // XGQ code
+
+        result = nextfree;
+        nextfree = ROUNDUP((char *)nextfree + n, PGSIZE);
+        return result;
+	// return NULL; // XGQ code
 }
 
 // Set up a two-level page table:
@@ -122,7 +127,7 @@ mem_init(void)
 	i386_detect_memory();
 
 	// Remove this line when you're ready to test this function.
-	panic("mem_init: This function is not finished\n");
+	// panic("mem_init: This function is not finished\n");
 
 	//////////////////////////////////////////////////////////////////////
 	// create initial page directory.
@@ -144,7 +149,7 @@ mem_init(void)
 	// each physical page, there is a corresponding struct PageInfo in this
 	// array.  'npages' is the number of physical pages in memory.
 	// Your code goes here:
-
+	pages = (struct PageInfo *)boot_alloc(npages * sizeof(struct PageInfo));
 
 	//////////////////////////////////////////////////////////////////////
 	// Make 'envs' point to an array of size 'NENV' of 'struct Env'.
@@ -172,6 +177,7 @@ mem_init(void)
 	//      (ie. perm = PTE_U | PTE_P)
 	//    - pages itself -- kernel RW, user NONE
 	// Your code goes here:
+	boot_map_region(kern_pgdir, UPAGES, ROUNDUP(npages * sizeof(struct PageInfo), PGSIZE), PADDR(pages), PTE_W);
 
 	//////////////////////////////////////////////////////////////////////
 	// Map the 'envs' array read-only by the user at linear address UENVS
@@ -192,6 +198,7 @@ mem_init(void)
 	//       overwrite memory.  Known as a "guard page".
 	//     Permissions: kernel RW, user NONE
 	// Your code goes here:
+	boot_map_region(kern_pgdir, KSTACKTOP - KSTKSIZE, KSTKSIZE, PADDR(bootstack), PTE_W);
 
 	//////////////////////////////////////////////////////////////////////
 	// Map all of physical memory at KERNBASE.
@@ -202,6 +209,7 @@ mem_init(void)
 	// Permissions: kernel RW, user NONE
 	// Your code goes here:
 
+	boot_map_region(kern_pgdir, KERNBASE, 0x100000000 - KERNBASE, 0, PTE_W);
 	// Check that the initial page directory has been set up correctly.
 	check_kern_pgdir();
 
@@ -260,8 +268,16 @@ page_init(void)
 	// NB: DO NOT actually touch the physical memory corresponding to
 	// free pages!
 	size_t i;
+
+	extern char end[];
+	char * boot_freemem = ROUNDUP((char *)end - KERNBASE, PGSIZE) + npages * sizeof(struct PageInfo) + PGSIZE;
+        size_t low_ppn = PGNUM(IOPHYSMEM);
+	size_t up_ppn = PGNUM(ROUNDUP(boot_freemem, PGSIZE));
+
 	for (i = 0; i < npages; i++) {
 		pages[i].pp_ref = 0;
+		if (0 == i) continue;
+		if (i >= low_ppn && i < up_ppn) continue;
 		pages[i].pp_link = page_free_list;
 		page_free_list = &pages[i];
 	}
@@ -280,7 +296,16 @@ struct PageInfo *
 page_alloc(int alloc_flags)
 {
 	// Fill this function in
-	return 0;
+	struct PageInfo	* pp;
+	if (NULL == page_free_list)
+		return NULL;
+
+	pp = page_free_list;
+	page_free_list = pp->pp_link;
+	if (alloc_flags & ALLOC_ZERO)
+		memset(page2kva(pp), 0, PGSIZE);
+	pp->pp_ref = 0; 
+	return pp;
 }
 
 //
@@ -291,6 +316,9 @@ void
 page_free(struct PageInfo *pp)
 {
 	// Fill this function in
+	assert(pp->pp_ref == 0);
+	pp->pp_link = page_free_list;
+	page_free_list = pp;
 }
 
 //
@@ -330,7 +358,28 @@ pte_t *
 pgdir_walk(pde_t *pgdir, const void *va, int create)
 {
 	// Fill this function in
-	return NULL;
+	#define FALSE 0
+	#define TRUE  1
+	pde_t pde;
+	pte_t *ptp = NULL;
+	struct PageInfo *pp = NULL;
+	pde = pgdir[PDX(va)];
+	if (0 == (PTE_P & pde) && TRUE == create)
+	{
+		pp = (struct PageInfo *)page_alloc(ALLOC_ZERO);
+		if (NULL != pp)
+		{
+			pgdir[PDX(va)] = page2pa(pp) | PTE_P | PTE_U | PTE_W;
+			pp->pp_ref++;
+		}
+	}
+
+	pde = pgdir[PDX(va)];
+	if (0 == (PTE_P & pde))
+		return NULL;
+	
+	ptp = &((pte_t *)page2kva(pa2page(PDR_ADDR(pgdir[PDX(va)]))))[PTX(va)];	
+	return ptp;
 }
 
 //
@@ -347,6 +396,15 @@ static void
 boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm)
 {
 	// Fill this function in
+	pte_t *ptep;
+	assert(0 == size % PGSIZE);
+	for( ; size; size -= PGSIZE)
+	{
+		ptep = pgdir_walk(pgdir, (void *)va, TRUE);
+		*ptep = pa | perm | PTE_P;
+		va += PGSIZE;
+		pa += PGSIZE;
+	}
 }
 
 //
@@ -378,6 +436,35 @@ int
 page_insert(pde_t *pgdir, struct PageInfo *pp, void *va, int perm)
 {
 	// Fill this function in
+	struct PageInfo *pp1, *pp2;
+	pte_t *pte_p;
+	pte_p = pgdir_walk(pgdir, va, TRUE);
+	if (NULL == pte_p)
+		return -E_NO_MEM;
+
+	if (PTE_P & *pte_p)
+	{
+		if (page2pa(pp) == PTE_ADDR(*pte_p))
+			pp->pp_ref--;
+		else
+			page_remove(pgdir, va);
+	}
+	//cprintf("pp = %x pp->pp_ref = %x page_free_list = %x\n", (uint32_t)pp, pp->pp_ref, (uint32_t)page_free_list);
+	//if (0 == pp->pp_ref && 0 != page_free_list)
+	//{
+	//	if (page_free_list == pp) page_free_list = page_free_list->pp_link;
+	//	else
+	//	{
+	//		for (pp1 = page_free_list, pp2 = page_free_list->pp_link; pp2; pp1 = pp1->pp_link, pp2 = pp2->pp_link)
+	//			if (NULL == pp2 || pp2 == pp) break;
+	//		assert(NULL == pp2);
+	//		pp1->pp_link = pp2->pp_link;
+	//	}
+	//}
+
+	*pte_p = page2pa(pp) | perm | PTE_P;
+	pp->pp_ref++;
+ 
 	return 0;
 }
 
@@ -396,7 +483,16 @@ struct PageInfo *
 page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
 {
 	// Fill this function in
-	return NULL;
+	pte_t *ptep;
+	struct PageInfo *pp;
+	ptep = (pte_t *)page2kva(pa2page(PDR_ADDR(pgdir[PDX(va)])));
+	if (0 == (pgdir[PDX(va)] & PTE_P) || 0 == (ptep[PTX(va)] & PTE_P))
+		return NULL;
+
+	pp = &pages[PGNUM(PTE_ADDR(ptep[PTX(va)]))];
+	if (pte_store)
+		*pte_store = &ptep[PTX(va)];
+	return pp;
 }
 
 //
@@ -417,7 +513,16 @@ page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
 void
 page_remove(pde_t *pgdir, void *va)
 {
-	// Fill this function in
+	// Fill this function ini
+	struct PageInfo *pp;
+	pte_t *pte_p;
+	pp = page_lookup(pgdir, va, &pte_p);
+	if (NULL == pp || NULL == pte_p)
+		return;
+	page_decref(pp);
+	
+	*pte_p = 0;
+	tlb_invalidate(pgdir, va);
 }
 
 //
@@ -747,6 +852,7 @@ check_page(void)
 
 	// should be able to map pp2 at PGSIZE because it's already there
 	assert(page_insert(kern_pgdir, pp2, (void*) PGSIZE, PTE_W) == 0);
+
 	assert(check_va2pa(kern_pgdir, PGSIZE) == page2pa(pp2));
 	assert(pp2->pp_ref == 1);
 
