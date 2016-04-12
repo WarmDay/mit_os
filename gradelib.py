@@ -387,7 +387,7 @@ class Runner():
 
         # Start QEMU
         pre_make()
-        self.qemu = QEMU(target_base + "-gdb", *make_args)
+        self.qemu = QEMU(target_base + "-nox-gdb", *make_args)
 	#print self.qemu
         self.gdb = None
 
