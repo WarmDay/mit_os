@@ -116,7 +116,22 @@ env_init(void)
 {
 	// Set up envs array
 	// LAB 3: Your code here.
-
+	int i;
+	struct Env *tail = NULL;
+	for (i = 0; i < NENV; i++)
+	{
+		envs[i].env_status = ENV_FREE;
+		envs[i].env_id = 0;
+		envs[i].env_link = NULL;
+		if (0 == i)
+			tail = env_free_list = &envs[0];
+		else
+		{
+			tail->env_link = &envs[i];
+			tail = tail->env_link;
+		}
+		
+	}
 	// Per-CPU part of the initialization
 	env_init_percpu();
 }
@@ -180,8 +195,13 @@ env_setup_vm(struct Env *e)
 
 	// LAB 3: Your code here.
 
+	p->pp_ref++;
+	e->env_pgdir = (pde_t *)page2kva(p);
+	for (i = 0; i <= PDX(0xFFFFFFFF); i++)
+		e->env_pgdir[i] = (i >= PDX(UTOP)? kern_pgdir[i] : 0);
 	// UVPT maps the env's own page table read-only.
 	// Permissions: kernel R, user R
+
 	e->env_pgdir[PDX(UVPT)] = PADDR(e->env_pgdir) | PTE_P | PTE_U;
 
 	return 0;
@@ -267,6 +287,21 @@ region_alloc(struct Env *e, void *va, size_t len)
 	//   'va' and 'len' values that are not page-aligned.
 	//   You should round va down, and round (va + len) up.
 	//   (Watch out for corner-cases!)
+
+	void *start_va, *end_va;
+	uint32_t i;
+	int result;
+	struct PageInfo *pp;
+
+	start_va = ROUNDDOWN(va, PGSIZE);
+	end_va = ROUNDUP(va + len, PGSIZE);
+	for (i = (uint32_t)start_va; i < (uint32_t)end_va; i += PGSIZE)
+	{
+		if (!(pp = page_alloc(0)))
+			panic("There is no enough memory for function: region_alloc");
+		if (0 != (result = page_insert(e->env_pgdir, pp, (void *)i, PTE_U | PTE_P | PTE_W)))
+			panic("There is no enough memory for function: region_alloc");
+	}
 }
 
 //
@@ -323,11 +358,34 @@ load_icode(struct Env *e, uint8_t *binary, size_t size)
 	//  What?  (See env_run() and env_pop_tf() below.)
 
 	// LAB 3: Your code here.
+	struct Proghdr *ph, *eph;
+	struct Elf * ELFHDR = (struct Elf *)binary;
+	int i;
+	char a, b;
+	char *tmp;
 
+	if (ELFHDR->e_magic != ELF_MAGIC)
+		panic("Error! Function: load_icode");
+
+	ph = (struct Proghdr *) ((uint8_t *) ELFHDR + ELFHDR->e_phoff);
+	eph = ph + ELFHDR->e_phnum;
+
+	lcr3(PADDR(e->env_pgdir));
+	for (;  ph < eph; ph++)
+		if (ELF_PROG_LOAD == ph->p_type)
+		{
+			region_alloc(e, (void *)ph->p_va, ph->p_memsz);
+			memset((void *)ph->p_va, 0, ph->p_memsz);
+			memmove((void *)ph->p_va, (uint8_t *)ELFHDR + ph->p_offset, ph->p_filesz);
+		}
+
+	lcr3(PADDR(kern_pgdir));
+	e->env_tf.tf_eip = (uintptr_t)(ELFHDR->e_entry);
 	// Now map one page for the program's initial stack
 	// at virtual address USTACKTOP - PGSIZE.
-
 	// LAB 3: Your code here.
+
+	region_alloc(e, (void *)(USTACKTOP - PGSIZE), PGSIZE);
 }
 
 //
@@ -341,6 +399,12 @@ void
 env_create(uint8_t *binary, size_t size, enum EnvType type)
 {
 	// LAB 3: Your code here.
+	struct Env *e;
+	int result;
+	if (0 != (result = env_alloc(&e, 0)))
+		cprintf("Error! Function: env_alloc Error msg: %e", result);
+	load_icode(e, binary, size);
+	curenv = e;
 }
 
 //
@@ -416,6 +480,42 @@ env_destroy(struct Env *e)
 //
 // This function does not return.
 //
+
+//The sequence for command pushal: %eax->%ecx->%edx->%ebx->%esp->%ebp->%esi->%edi
+//The sequence for command popal: reverse the sequence of command pushal
+//The sequence for command iret: %ip->%cs->%flags (if the return is to another privilege level) ->%esp->%ss 
+//struct PushRegs {
+//	/* registers as pushed by pusha */
+//	uint32_t reg_edi;
+//	uint32_t reg_esi;
+//	uint32_t reg_ebp;
+//	uint32_t reg_oesp;		/* Useless */
+//	uint32_t reg_ebx;
+//	uint32_t reg_edx;
+//	uint32_t reg_ecx;
+//	uint32_t reg_eax;
+//} __attribute__((packed));
+//
+//struct Trapframe {
+//	struct PushRegs tf_regs;
+//	uint16_t tf_es;
+//	uint16_t tf_padding1;
+//	uint16_t tf_ds;
+//	uint16_t tf_padding2;
+//	uint32_t tf_trapno;
+//	/* below here defined by x86 hardware */
+//	uint32_t tf_err;
+//	uintptr_t tf_eip;
+//	uint16_t tf_cs;
+//	uint16_t tf_padding3;
+//	uint32_t tf_eflags;
+//	/* below here only when crossing rings, such as from user to kernel */
+//	uintptr_t tf_esp;
+//	uint16_t tf_ss;
+//	uint16_t tf_padding4;
+//} __attribute__((packed));
+
+
 void
 env_pop_tf(struct Trapframe *tf)
 {
@@ -456,7 +556,16 @@ env_run(struct Env *e)
 	//	e->env_tf to sensible values.
 
 	// LAB 3: Your code here.
+	if (ENV_RUNNING == curenv->env_status)
+		curenv->env_status = ENV_RUNNABLE;
+	curenv = e;
+	curenv->env_status = ENV_RUNNING;
+	curenv->env_runs++;
+	lcr3(PADDR(curenv->env_pgdir));
+	env_pop_tf(&curenv->env_tf);
 
-	panic("env_run not yet implemented");
+	//XGQ start
+	//panic("env_run not yet implemented");
+	//XGQ end
 }
 

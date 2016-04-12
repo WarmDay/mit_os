@@ -1,0 +1,60 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+ASM	string.c	9;"	d	file:
+BUFLEN	readline.c	4;"	d	file:
+_panic	panic.c	/^_panic(const char *file, int line, const char *fmt, ...)$/;"	f
+_start	entry.S	/^_start:$/;"	l
+args_exist	entry.S	/^args_exist:$/;"	l
+binaryname	libmain.c	/^const char *binaryname = "<unknown>";$/;"	v
+buf	printf.c	/^	char buf[256];$/;"	m	struct:printbuf	file:
+buf	printfmt.c	/^	char *buf;$/;"	m	struct:sprintbuf	file:
+buf	readline.c	/^static char buf[BUFLEN];$/;"	v	file:
+cnt	printf.c	/^	int cnt;	\/\/ total bytes printed so far$/;"	m	struct:printbuf	file:
+cnt	printfmt.c	/^	int cnt;$/;"	m	struct:sprintbuf	file:
+cprintf	printf.c	/^cprintf(const char *fmt, ...)$/;"	f
+cputchar	console.c	/^cputchar(int ch)$/;"	f
+ebuf	printfmt.c	/^	char *ebuf;$/;"	m	struct:sprintbuf	file:
+error_string	printfmt.c	/^static const char * const error_string[MAXERROR] =$/;"	v	file:
+exit	exit.c	/^exit(void)$/;"	f
+getchar	console.c	/^getchar(void)$/;"	f
+getint	printfmt.c	/^getint(va_list *ap, int lflag)$/;"	f	file:
+getuint	printfmt.c	/^getuint(va_list *ap, int lflag)$/;"	f	file:
+idx	printf.c	/^	int idx;	\/\/ current buffer index$/;"	m	struct:printbuf	file:
+libmain	libmain.c	/^libmain(int argc, char **argv)$/;"	f
+memcmp	string.c	/^memcmp(const void *v1, const void *v2, size_t n)$/;"	f
+memcpy	string.c	/^memcpy(void *dst, const void *src, size_t n)$/;"	f
+memfind	string.c	/^memfind(const void *s, int c, size_t n)$/;"	f
+memmove	string.c	/^memmove(void *dst, const void *src, size_t n)$/;"	f
+memset	string.c	/^memset(void *v, int c, size_t n)$/;"	f
+printbuf	printf.c	/^struct printbuf {$/;"	s	file:
+printfmt	printfmt.c	/^printfmt(void (*putch)(int, void*), void *putdat, const char *fmt, ...)$/;"	f
+printnum	printfmt.c	/^printnum(void (*putch)(int, void*), void *putdat,$/;"	f	file:
+putch	printf.c	/^putch(int ch, struct printbuf *b)$/;"	f	file:
+readline	readline.c	/^readline(const char *prompt)$/;"	f
+snprintf	printfmt.c	/^snprintf(char *buf, int n, const char *fmt, ...)$/;"	f
+sprintbuf	printfmt.c	/^struct sprintbuf {$/;"	s	file:
+sprintputch	printfmt.c	/^sprintputch(int ch, struct sprintbuf *b)$/;"	f	file:
+strcat	string.c	/^strcat(char *dst, const char *src)$/;"	f
+strchr	string.c	/^strchr(const char *s, char c)$/;"	f
+strcmp	string.c	/^strcmp(const char *p, const char *q)$/;"	f
+strcpy	string.c	/^strcpy(char *dst, const char *src)$/;"	f
+strfind	string.c	/^strfind(const char *s, char c)$/;"	f
+strlcpy	string.c	/^strlcpy(char *dst, const char *src, size_t size)$/;"	f
+strlen	string.c	/^strlen(const char *s)$/;"	f
+strncmp	string.c	/^strncmp(const char *p, const char *q, size_t n)$/;"	f
+strncpy	string.c	/^strncpy(char *dst, const char *src, size_t size) {$/;"	f
+strnlen	string.c	/^strnlen(const char *s, size_t size)$/;"	f
+strtol	string.c	/^strtol(const char *s, char **endptr, int base)$/;"	f
+sys_cgetc	syscall.c	/^sys_cgetc(void)$/;"	f
+sys_cputs	syscall.c	/^sys_cputs(const char *s, size_t len)$/;"	f
+sys_env_destroy	syscall.c	/^sys_env_destroy(envid_t envid)$/;"	f
+sys_getenvid	syscall.c	/^sys_getenvid(void)$/;"	f
+syscall	syscall.c	/^syscall(int num, int check, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)$/;"	f	file:
+thisenv	libmain.c	/^const volatile struct Env *thisenv;$/;"	v	typeref:struct:Env
+vcprintf	printf.c	/^vcprintf(const char *fmt, va_list ap)$/;"	f
+vprintfmt	printfmt.c	/^vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)$/;"	f
+vsnprintf	printfmt.c	/^vsnprintf(char *buf, int n, const char *fmt, va_list ap)$/;"	f

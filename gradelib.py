@@ -373,7 +373,7 @@ class Runner():
         self.__default_monitors = default_monitors
 
     def run_qemu(self, *monitors, **kw):
-        """Run a QEMU-based test.  monitors should functions that will
+        """Run a QEMU-based test.  monitors should function that will
         be called with this Runner instance once QEMU and GDB are
         started.  Typically, they should register callbacks that throw
         TerminateTest when stop events occur.  The target_base
@@ -387,7 +387,8 @@ class Runner():
 
         # Start QEMU
         pre_make()
-        self.qemu = QEMU(target_base + "-nox-gdb", *make_args)
+        self.qemu = QEMU(target_base + "-gdb", *make_args)
+	#print self.qemu
         self.gdb = None
 
         try:
@@ -401,8 +402,9 @@ class Runner():
                 print(self.qemu.output)
                 sys.exit(1)
             post_make()
+#	    print("set gdb ok")
 
-            # QEMU and GDB are up
+	    # QEMU and GDB are up
             self.reactors = [self.qemu, self.gdb]
 
             # Start monitoring
@@ -451,6 +453,8 @@ Failed to shutdown QEMU.  You might need to 'killall qemu' or
                 rset = [r for r in reactors if r.fileno() is not None]
                 if not rset:
                     return
+
+	#	print reset
 
                 rset, _, _ = select.select(rset, [], [], timeleft)
                 for reactor in rset:

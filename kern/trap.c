@@ -62,10 +62,53 @@ static const char *trapname(int trapno)
 void
 trap_init(void)
 {
-	extern struct Segdesc gdt[];
 
 	// LAB 3: Your code here.
+	
+	extern void divide_trap();
+	extern void debug_trap();
+	extern void nmi_trap();
+	extern void brkpt_trap();
+	extern void oflow_trap();
+	extern void bound_trap();
+	extern void illop_trap();
+	extern void device_trap();
+	extern void dblflt_trap();
+	extern void tss_trap();
+	extern void segnp_trap();
+	extern void stack_trap();
+	extern void gpflt_trap();
+	extern void pgflt_trap();
+	extern void fperr_trap();
+	extern void align_trap();
+	extern void mchk_trap();
+	extern void simderr_trap();
+	extern void syscall_intr();
 
+	SETGATE(idt[T_DIVIDE], 0, GD_KT, divide_trap, 0);
+	SETGATE(idt[T_DEBUG], 0, GD_KT, debug_trap, 0);
+	SETGATE(idt[T_NMI], 0, GD_KT, nmi_trap, 0);
+
+	// break point needs no kernel mode privilege
+	SETGATE(idt[T_BRKPT], 0, GD_KT, brkpt_trap, 3);
+
+	SETGATE(idt[T_OFLOW], 0, GD_KT, oflow_trap, 0);
+	SETGATE(idt[T_BOUND], 0, GD_KT, bound_trap, 0);
+	SETGATE(idt[T_ILLOP], 0, GD_KT, illop_trap, 0);
+	SETGATE(idt[T_DEVICE], 0, GD_KT, device_trap, 0);
+	SETGATE(idt[T_DBLFLT], 0, GD_KT, dblflt_trap, 0);
+	SETGATE(idt[T_TSS], 0, GD_KT, tss_trap, 0);
+	SETGATE(idt[T_SEGNP], 0, GD_KT, segnp_trap, 0);
+	SETGATE(idt[T_STACK], 0, GD_KT, stack_trap, 0);
+	SETGATE(idt[T_GPFLT], 0, GD_KT, gpflt_trap, 0);
+	SETGATE(idt[T_PGFLT], 0, GD_KT, pgflt_trap, 0);
+	SETGATE(idt[T_FPERR], 0, GD_KT, fperr_trap, 0);
+	SETGATE(idt[T_ALIGN], 0, GD_KT, align_trap, 0);
+	SETGATE(idt[T_MCHK], 0, GD_KT, mchk_trap, 0);
+	SETGATE(idt[T_SIMDERR], 0, GD_KT, simderr_trap, 0);
+
+	// SYSCALL
+	SETGATE(idt[T_SYSCALL], 0, GD_KT, syscall_intr, 3);
 	// Per-CPU setup 
 	trap_init_percpu();
 }
@@ -141,9 +184,32 @@ print_regs(struct PushRegs *regs)
 static void
 trap_dispatch(struct Trapframe *tf)
 {
+	int r;
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
+	if (tf->tf_trapno == T_PGFLT) {
+		page_fault_handler(tf);
+		return;
+	}
 
+	if (tf->tf_trapno == T_BRKPT) {
+		monitor(tf);
+		return;
+	}
+	if (tf->tf_trapno == T_SYSCALL) {
+		cprintf("Enter the SYSCALL! SYSCALL number: %d\n", tf->tf_regs.reg_eax);
+		r = syscall(
+			tf->tf_regs.reg_eax,
+			tf->tf_regs.reg_edx,
+			tf->tf_regs.reg_ecx,
+			tf->tf_regs.reg_ebx,
+			tf->tf_regs.reg_edi,
+			tf->tf_regs.reg_esi);
+		if (r < 0)
+			panic("trapz_dispatch: unvalid syscall number!\n");
+		tf->tf_regs.reg_eax = r;
+		return;
+	}
 	// Unexpected trap: The user process or the kernel has a bug.
 	print_trapframe(tf);
 	if (tf->tf_cs == GD_KT)
